@@ -1,0 +1,123 @@
+#! /bin/sh
+#  Copyright 2014 GP Orcullo
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see
+#    <http://www.gnu.org/licenses/>.
+
+
+PREREQ=""
+
+RWFS=""
+RWFSTYPE=""
+RWFSOPTS="noatime"
+AUFS=false
+AUFSCK=false
+
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /scripts/functions
+
+# create required directories
+mkdir -p aufs rootfs rw
+
+for x in $(/bin/cat /proc/cmdline); do 
+    case $x in 
+    rwfs=*)
+        RWFS=${x#rwfs=}
+        ;;
+    rwfstype=*)
+        RWFSTYPE=${x#rwfstype=}
+        ;;
+    rwfsopts=*)
+        RWFSOPTS=${x#rwfsopts=}
+        ;;
+    aufsck)
+        AUFSCK=true
+        ;;
+    esac
+done
+
+# mount rootfs
+mount --move /root /rootfs
+
+# check for rw partition
+if [ "${RWFS}" = "tmpfs" ]; then
+    RWFS="aufs-tmpfs"
+    RWFSTYPE="tmpfs"
+    RWFSOPTS="rw"
+else
+    if [ ! -b "${RWFS}" ]; then
+        log_failure_msg "RW partition ${RWFS} missing"
+   RWFS="" 
+    fi
+fi
+
+if ${AUFSCK} && [ -b "${RWFS}" ]; then
+    # fsck rw partition
+    log_begin_msg "Checking RW partition ${RWFS}"
+    /sbin/e2fsck.static -y ${RWFS} || log_warning_msg \
+	"FSCK on device ${RWFS} failed"
+    log_end_msg
+fi
+
+if [ -n "${RWFS}" ]; then 
+    # mount rw partition
+    mount -o ${RWFSOPTS} -t ${RWFSTYPE} ${RWFS} /rw
+    if [ $? -ne 0 ]; then
+        log_failure_msg "RW partition ${RWFS} mounting failed"
+        AUFS=false 
+    else
+        log_success_msg "Mounted RW partition ${RWFS}"
+        AUFS=true
+    fi
+else
+    AUFS=false
+fi
+
+if ${AUFS}; then
+    # mount aufs partition
+    mount -t aufs -o dirs=/rw:/rootfs=ro aufs /aufs
+    if [ $? -ne 0 ]; then
+        log_failure_msg "AUFS mounting failed"
+        AUFS=false
+    else
+        log_success_msg "Mounted AUFS partition"
+    fi
+fi
+
+if ${AUFS}; then
+    # mount aufs  as root partition
+    # test for mount points on aufs file system
+    [  -d /aufs/ro ] || /bin/mkdir /aufs/ro
+    [  -d /aufs/rw ] || /bin/mkdir /aufs/rw
+
+    # move RO and RW inside aufs 
+    mount --move /rw /aufs/rw
+    mount --move /rootfs /aufs/ro
+
+    mount --move /aufs /root
+else
+    mount --move /rootfs /root
+fi
+

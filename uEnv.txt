@@ -1,0 +1,15 @@
+kernel_file=zImage
+initrd_file=uInitrd
+  
+loadzimage=load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${kernel_file}
+loadinitrd=load mmc ${mmcdev}:${mmcpart} 0x81000000 ${initrd_file}; setenv initrd_size ${filesize}
+loadfdt=load mmc ${mmcdev}:${mmcpart} ${fdtaddr} /dtbs/${fdtfile}
+  
+console=ttyO0,115200n8
+mmcroot=/dev/mmcblk0p2 ro
+mmcrootfstype=ext4 rootwait fixrtc
+  
+mmcargs=setenv bootargs rwfs=tmpfs console=${console} root=${mmcroot} rootfstype=${mmcrootfstype} ${optargs}
+  
+uenvcmd=run loadzimage; run loadinitrd; run loadfdt; run mmcargs; bootz ${loadaddr} 0x81000000:${initrd_size} ${fdtaddr}
+

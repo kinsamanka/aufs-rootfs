@@ -1,0 +1,64 @@
+#! /bin/sh
+#  Copyright 2014 GP Orcullo
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+#  GNU General Public License for more details.
+#
+#    You should have received a copy of the GNU General Public License
+#    along with this program.  If not, see
+#    <http://www.gnu.org/licenses/>.
+
+
+PREREQ=""
+
+ROOTDEV=""
+RWFS=""
+
+prereqs()
+{
+    echo "$PREREQ"
+}
+
+case $1 in
+prereqs)
+    prereqs
+    exit 0
+    ;;
+esac
+
+. /scripts/functions
+
+for x in $(/bin/cat /proc/cmdline); do 
+    case $x in 
+    root=*)
+        ROOTDEV=${x#root=}
+        ;;
+    rwfs=*)
+        RWFS=${x#rwfs=}
+        ;;
+    esac
+done
+
+if [ -n "${RWFS}" ]; then
+    # check root device
+    if [ ! -b "${ROOTDEV}" ]; then 
+        panic "Root partition ${ROOTDEV} missing"
+    fi 
+
+    # create mtab
+    ln -s /proc/mounts /etc/mtab
+
+    # fsck root partition
+    log_begin_msg "Checking root partition ${ROOTDEV}"
+    /sbin/e2fsck.static -y ${ROOTDEV} || log_warning_msg \
+	"FSCK on root device ${ROOTDEV} failed"
+    log_end_msg
+fi
+
