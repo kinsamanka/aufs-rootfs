@@ -1,15 +1,29 @@
 kernel_file=zImage
-initrd_file=uInitrd
   
 loadzimage=load mmc ${mmcdev}:${mmcpart} ${loadaddr} ${kernel_file}
-loadinitrd=load mmc ${mmcdev}:${mmcpart} 0x81000000 ${initrd_file}; setenv initrd_size ${filesize}
 loadfdt=load mmc ${mmcdev}:${mmcpart} ${fdtaddr} /dtbs/${fdtfile}
-  
+
+# make sure these 2 lines are present
+initrd_file=uInitrd
+loadinitrd=load mmc ${mmcdev}:${mmcpart} 0x81000000 ${initrd_file}; setenv initrd_size ${filesize}
+
 console=ttyO0,115200n8
 mmcroot=/dev/mmcblk0p2 ro
 mmcrootfstype=ext4 rootwait fixrtc
-  
+
+# add "rwfs=tmpfs" to enable rwfs; remove to disable
+# rwfs can also be set to any device that is visible during boot time
+#     example: "rwfs=/dev/mmcblk1p2"
+# make sure to set "rwfstype" to the correct fs type
+#     example: "rwfstype=ext4"
+# "rwfsopts" sets the mount options and defaults to "noatime"
+#     example: "rwfsopts=noatime"
+# to enable fsck of the RWFS device at boot, add "aufsck" to the bootargs
+
 mmcargs=setenv bootargs rwfs=tmpfs console=${console} root=${mmcroot} rootfstype=${mmcrootfstype} ${optargs}
-  
+
+# add "run loadinitrd;" and "0x81000000:${initrd_size}" to the bootz command.
+# Normally this line is:
+# uenvcmd=run loadzimage; run loadfdt; run mmcargs; bootz ${loadaddr} - ${fdtaddr}
 uenvcmd=run loadzimage; run loadinitrd; run loadfdt; run mmcargs; bootz ${loadaddr} 0x81000000:${initrd_size} ${fdtaddr}
 
